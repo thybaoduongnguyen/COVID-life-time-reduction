@@ -1,0 +1,856 @@
+---
+title: "Reduction in average life expectancy due to COVID-19-deaths"
+author: 
+- name: Thy Duong, Benjamin Willnecker
+  affiliation: Technical University of Munich
+abstract: "Based on age-specific life expectancy, we calculate how much earlier than expected COVID-19 deaths passed away. For each age group, this is accumulated and then divided by the total number of people in the age group to determine the average remaining lifetime reduction for each member of the age group. It is shown, that the reduciton in life expectancy from COVID-19 deaths increases with age."
+keywords: "COVID-19, live expectancy, telling stories with R: data visualization, SOT86603"
+output: 
+  html_document: 
+    theme: readable
+    toc: true
+    number_sections: false
+---
+
+<br>
+
+<br>
+
+## Overview!
+
+<br>
+
+## Used Libraries
+
+<br>
+
+```{r, message=FALSE}
+
+library(tidyverse)
+library(dplyr)
+library(validate) # Used for: Validating datasets
+library(ggplot2)
+library(patchwork) # Used for: Combining two different plots into one
+library(grid) # Used for: Creating a custom key glyph in the legend (two triangles within a rectangle)
+library(png) # Used for: Embedding pictures in the plot (PNG format for transparent background)
+```
+
+<br>
+
+<br>
+
+## Used Data
+
+<br>
+
+Data sources:
+
+| Abbreviation for imported data table | Description of relevant data | Selected year(s)\* | Sources |
+|------------------|------------------|------------------|------------------|
+| DB_Num | Number of population by gender and age | 2019 | Destatis: [Link](https://www-genesis.destatis.de/datenbank/online/url/e45a63ec) |
+| DB_Life_Exp | Life expectancy by gender and age | 2017/2019 | Destatis: [Link](https://www-genesis.destatis.de/datenbank/online/url/18edcc59) |
+| DB_Deaths | Number of COVID-19-deaths by gender and age-groups | 2020-2023 | Destatis: [Link](https://www-genesis.destatis.de/datenbank/online/url/86e80af8) |
+
+Reasons for the choice of years:
+
+-   DB_Deaths:\
+    This work focuses on the main COVID-19 period including the years 2020 to 2023 in Germany.\
+    The first COVID-19 case in Germany was recorded in January 2020. In January 2023, the pandemic transitioned into an endemic situation, and in March 2023, testing and mask requirements were abolished.\
+    (<https://www.bundesgesundheitsministerium.de/coronavirus/chronik-coronavirus.html>)
+
+-   DB_Life_Exp:\
+    The reference point is life expectancy unaffected by COVID-19, which is why the period before COVID-19, 2017/2019, was selected for this analysis.
+
+-   DB_Num:\
+    The number of COVID-19 deaths is reported by age group. To calculate the average life expectancy for these age groups, life expectancy per year must be weighted according to its share in the group.
+
+<br>
+
+<br>
+
+### Number of population by gender and age (DB_Num)
+
+DB_Num Import:
+
+```{r, message=FALSE}
+DB_Num_Import <- read_csv2("DB_Num_Download.csv")
+
+summary(DB_Num_Import)
+```
+
+DB_Num target schema: DB_Num(gender, age_year, num)
+
+```{r}
+
+DB_Num <- DB_Num_Import %>% 
+  rename(origin = "2_variable_attribute_label", 
+         gender = "3_variable_attribute_label", 
+         age_year = "4_variable_attribute_label", 
+         num = "value") %>% 
+  filter(origin == "Total") %>% 
+  select(gender, age_year, num) %>% 
+  mutate(age_year = replace(age_year, age_year == "under 1 year", 0)) %>% 
+  filter(gender != "Total", age_year != "Total") %>% 
+  mutate(age_year = parse_number(age_year)) %>% 
+  arrange(gender, age_year)
+
+summary(DB_Num)
+head(DB_Num)
+tail(DB_Num)
+
+#write.csv2(DB_Num, "db_num_export_test.csv")
+```
+
+DB_Num validation:
+
+```{r}
+
+rules_DB_Num <- validator(
+  gender %vin% c("Male", "Female"),
+  in_range(age_year, min = 0, max = 85), # Min in Data = "0 years"; Max in Data = "85 years and over"
+  sum(num) > 82000000, # sum population of germany between 82 and 84 mio.
+  sum(num) < 84000000, # sum population of germany between 82 and 84 mio.
+  all_complete(gender), # no missiing values
+  all_complete(age_year), # no missiing values
+  all_complete(num), # no missiing values
+  is_unique(gender, age_year))  # unique combinations of gender and age
+
+test_DB_Num <- confront(DB_Num, rules_DB_Num)
+summary(test_DB_Num)
+```
+
+<br>
+
+<br>
+
+### Life expectancy by gender and age (DB_Life_Exp)
+
+DB_Life_Exp Import:
+
+```{r, message=FALSE}
+
+# read_delim -> seperator is ";" decimalseperator is ","
+DB_Life_Exp_Import <- read_delim(
+  "DB_Life_Exp_Download.csv", 
+  delim = ";",
+  locale = locale(decimal_mark = ".")
+)
+
+summary(DB_Life_Exp_Import)
+```
+
+DB_Life_Exp target schema: DB_Life_Exp(gender, age_year, life_exp)
+
+```{r}
+
+DB_Life_Exp <- DB_Life_Exp_Import %>% 
+  rename(gender = "2_variable_attribute_label", 
+         age_year = "3_variable_attribute_label", 
+         life_exp = "value") %>% 
+  select(gender, age_year, life_exp) %>% 
+  mutate(age_year = parse_number(age_year)) %>% 
+  arrange(gender, age_year)
+
+summary(DB_Life_Exp)
+
+head(DB_Life_Exp)
+tail(DB_Life_Exp)
+```
+
+DB_Life_Exp validation:
+
+```{r}
+
+rules_DB_Life_Exp <- validator(
+  gender %vin% c("Male", "Female"),
+  in_range(age_year, min = 0, max = 100), # Min in Data = "0 years"; Max in Data = "100 years"
+  in_range(life_exp, min = 0, max = 95), # life_exp not negative, not over 90 years
+  all_complete(gender), # no missiing values
+  all_complete(age_year), # no missiing values
+  all_complete(life_exp), # no missiing values
+  is_unique(gender, age_year))  # unique combinations of gender and age
+
+test_DB_Life_Exp <- confront(DB_Life_Exp, rules_DB_Life_Exp)
+summary(test_DB_Life_Exp)
+```
+
+<br>
+
+<br>
+
+### Number of COVID-19-deaths by gender and age-groups (DB_Deaths)
+
+DB_Deaths Import:
+
+```{r, message=FALSE}
+
+DB_Deaths_Import <- read_csv2("DB_Deaths_Download.csv")
+
+summary(DB_Deaths_Import)
+```
+
+DB_Deaths target schema: DB_Deaths(gender, age_year, avg_life_exp_group)
+
+```{r}
+
+# Set values to 0, if "no figures, numerical value exactly zero or, if necessary, changed to zero to ensure statistical confidentiality" or "numerical value unknown or not to be disclosed"
+DB_Deaths <- DB_Deaths_Import %>% mutate(value = replace(value, value == ".", 0))
+DB_Deaths <- DB_Deaths %>% mutate(value = replace(value, value == "-", 0))
+
+# write.csv2(DB_Deaths, "db_deaths_export_test.csv")
+
+# Proof that age of COVID-19 deaths is always known
+number_deaths_age_unkonown <- DB_Deaths_Import %>% filter("4_variable_attribute_label" == "COVID-19, virus detected") %>% count("3_variable_attribute_label" == "age unknown")
+number_deaths_age_unkonown
+
+# Transformation in target schema
+DB_Deaths <- DB_Deaths %>% 
+  rename(death_cause = "4_variable_attribute_label",
+         gender = "2_variable_attribute_label", 
+         age_group = "3_variable_attribute_label", 
+         num_death = "value") %>% 
+  filter(death_cause == "COVID-19, virus detected") %>%
+  filter(age_group != "age unknown") %>% # all ages are known -> see proof
+  select(gender, age_group, num_death) %>% 
+  mutate(age_group = replace(age_group, age_group == "under 1 year", 0)) %>% 
+  mutate(age_group = str_sub(age_group, 1, 2)) %>%
+  mutate(age_group = parse_number(age_group)) %>% # min. age included for each age_group
+  mutate(num_death = as.numeric(num_death)) %>%
+  arrange(gender, age_group) %>%
+  group_by(gender, age_group) %>%
+  summarise(num_death = sum(num_death), .groups = "drop")
+
+summary(DB_Deaths)
+
+head(DB_Deaths)
+tail(DB_Deaths)
+```
+
+DB_Deaths validation:
+
+```{r}
+
+rules_DB_Deaths <- validator(
+  gender %vin% c("Male", "Female"),
+  in_range(age_group, min = 0, max = 85), # Min in Data = "under 1 year"; Max in Data = "85 years and over"
+  sum(num_death) > 170000, # Source: Robert Koch Insitut (https://robert-koch-institut.github.io/COVID-19-Todesfaelle_in_Deutschland/)
+  sum(num_death) < 200000, # Source: Robert Koch Insitut (https://robert-koch-institut.github.io/COVID-19-Todesfaelle_in_Deutschland/)
+  all_complete(gender), # no missiing values
+  all_complete(age_group), # no missiing values
+  all_complete(num_death)) # missiing values replaced by 0
+
+test_DB_Deaths <- confront(DB_Deaths, rules_DB_Deaths)
+summary(test_DB_Deaths)
+```
+
+<br>
+
+<br>
+
+## Data Manipulation
+
+<br>
+
+The average life expectancy and loss of life expectancy due to COVID-19 deaths per age group are calculated using the following steps:
+
+1.  Calculate the **total life expectancy** **per year of life** in total for all people in this age year:
+
+    1.1 Estimate the distribution of the population between 85 and 100 years of age. The estimate is based on the assumption that the number of people decreases strongly with increasing age (modelled with a geometric series). With the estimation, both the table for population size and the table for life expectancy now include age groups up to 100.
+
+    1.2 Join the life expectancy table with the population size table.
+
+    1.3 For each year of age: Create the total sum of life expectancy of all people in that age (life expectancy in age year \* number of people in that year of age).
+
+2.  Calculate the **average life expectancy per age group**, weighted by the number of people in the different years of each age group:
+
+    2.1 Create an age group categorization\*\* and group the table accordingly. Calculate the total sum of life expectancy of all people in the different age groups.\
+    \
+    \*\*The variable "age" is grouped to reduce complexity and because COVID-19 deaths are reported only by age group. The age distribution (exact years) within the age groups (group of years) for COVID-19 deaths is assumed to be the same as in the general population.
+
+    2.2 For each age group: Calculate the average life expectancy per person in that age group.
+
+3.  Calculate the **average loose of life expectancy due to COVID-19 deaths** per age group:
+
+    3.1 Make the age groups (age_group) in the DB_Death table the same as the age groups (age_group) in the T_Avg table.
+
+    3.2 Join T_Avg with DB_Death based on age group and gender.
+
+    3.3 Calculate the sum of all lost life expectancies because of COVID-19 deaths in each age group.
+
+    3.4 Calculate the average life expectancy lost for a person (in years, days and hours) depending on their age group.
+
+<br>
+
+### 1.1 Estimate population distribution between 85 and 100 years of age (Transform DB_Num).
+
+```{r}
+
+all.equal(DB_Num$age_year, DB_Life_Exp$age_year) # False
+# Goal: full_join of DB_Num and DB_Life
+# Problem: different length of tables -> "NA"-values would make subsequent calculation steps impossible/imprecise
+# DB_Num: age_year{0 - 85} -> length of 86 (for each gender)
+# DB_Life_Exp: age_year{0-100} -> lenght of 101 (for each gender)
+
+# Solution: Split value of "85 years and over" in 16 values (between 85 and 100 years) 
+# In ohter words: Estimate the number of people for each year between 85 and 100 years of age
+# Assumption: The number decreases significantly toward the extreme value of 100
+# Modeling: Geometric sequence (strong decrease)
+# Steps:
+# 1.a) Get number of female population over 84 years:
+num_female_over84 = DB_Num$num[DB_Num$age_year == 85 & DB_Num$gender == "Female"]
+num_female_over84
+# 1.b) Get number of male population over 84 years:
+num_male_over84 = DB_Num$num[DB_Num$age_year == 85 & DB_Num$gender == "Male"]
+num_male_over84
+# 2. Distribute this population size over the 16 years (according to the geometric sequence):
+x <- 0.1^(1/15)
+y_female <- num_female_over84 * (1 - x) / (1 - x^16)
+y_male <- num_male_over84 * (1 - x) / (1 - x^16)
+vec_female <- y_female * x^(0:15) 
+vec_male <- y_male * x^(0:15)
+# 3. Round the values of the vector (no half humans are possible) 
+vec_female_rounded <- round(vec_female)
+vec_male_rounded <- round(vec_male)
+
+# Test if sum("vec_female") == "female population over 84 years", considering rounding error
+between(sum(vec_female_rounded), num_female_over84 - 100, num_female_over84 + 100)
+# Test if sum("vec_male") == "male population over 84 years", considering rounding error
+between(sum(vec_male_rounded), num_male_over84 - 100, num_male_over84 + 100)
+
+# Vector with distribution of the female population between 84 and 100 years 
+vec_female_rounded
+# Vector with distribution of the male population between 84 and 100 years 
+vec_male_rounded
+
+# 4. Remove row for age_year == 85 from DB_Num
+DB_Num <- DB_Num %>% filter(age_year != 85)
+# 5. Add geometric sequence for the age_years 85 to 100 to DB_Num
+DB_Num <- DB_Num %>% add_row(gender = "Female", age_year = 85:100, num = vec_female_rounded)
+DB_Num <- DB_Num %>% add_row(gender = "Male", age_year = 85:100, num = vec_male_rounded)
+
+DB_Num <- DB_Num %>% arrange(gender, age_year)
+
+# Internal test:
+# write.csv2(DB_Num, "db_num_export_test.csv")
+```
+
+### 1.2 Join the life expectancy table (DB_Life_Exp) with the population size table (DB_Num).
+
+```{r}
+
+# create T_Sum{gender, age_year, num, life_exp}
+T_Sum <- full_join(DB_Num, DB_Life_Exp, by = c("age_year", "gender"))
+
+tail(T_Sum)
+```
+
+### 1.3 Calculate the sum of life expectancy (sum_life_exp), by adding up the life expectancy of all persons in this year of age.
+
+```{r}
+
+# Add variable "sum_life_exp" to T_Sum
+# "sum_life_exp" = "num" * "life_exp"
+T_Sum <- T_Sum %>% mutate(sum_life_exp = round(num * life_exp))
+
+tail(T_Sum)
+```
+
+### 2.1 Create a vector for grouping (vec_grouping) add it to T_Sum, group accordingly and calculate the sum of live expectancy per group (sum_life_exp_group).
+
+```{r}
+
+# Grouping of DB_Deaths: age_groups{0, 1-14, 15-19, [5-year steps], 80-84, >= 85}
+# Goal groups: age_groups{0-14, 15-24, 25-34, 35-44, 45-54, 55-64, 65-74, 75-84, >= 85}
+
+# Vector for grouping:
+vec_grouping <- c(rep(0, each = 5), rep(0:8, each = 10), rep(8, each = 6))
+# Repeat vector for each gender:
+age_group <- c(vec_grouping, vec_grouping)
+
+age_group
+
+# Add grouping-vector to T_Sum
+T_Group <- T_Sum %>% add_column(age_group)
+
+# Grouping and calculation of sum_life_exp
+T_Group <- T_Group %>% select(-age_year, -life_exp) %>% group_by(age_group, gender) %>% summarise(num_group = sum(num), sum_life_exp_group = (sum(sum_life_exp)))
+
+# Internal test if grouping was correct
+sum_min_age_group_1 <- T_Sum %>% filter(gender == "Male", between(age_year, 0, 14)) %>% summarize(num = sum(num)) %>% pull(num)
+sum_min_age_group_2 <- T_Group %>% filter(gender == "Male", age_group == 0) %>% pull(num_group)
+sum_min_age_group_1
+sum_min_age_group_2
+sum_min_age_group_1 == sum_min_age_group_2
+# Internal test if overall sum of population is equal to the population size of germany
+sum_all_num <- T_Sum %>% summarize(num = sum(num)) %>% pull(num)
+sum_all_num
+between(sum_all_num, 82000000, 84000000) # true
+
+# Internal test:
+# write.csv2(T_Group, "t_group_export_test.csv")
+```
+
+### 2.2 Calculate the average life expectancy for each age group (avg_life_exp_group).
+
+```{r}
+
+T_Avg <- T_Group %>% mutate(avg_life_exp_group = sum_life_exp_group / num_group)
+T_Avg %>% select(gender, age_group, avg_life_exp_group)
+
+# Internal test:
+# write.csv2(T_Group, "t_group_export_test10.csv")
+# write.csv2(T_Avg, "t_avg_export_test10.csv")
+```
+
+### 3.1 Make the age groups (age_group) in the DB_Death table the same as the age groups (age_group) in the T_Avg table.
+
+```{r}
+
+# T_Avg:
+# age_groups{0-14, 15-24, 25-34, 35-44, 45-54, 55-64, 65-74, 75-84, >= 85}
+# represented by {0, 1, 2, 3, 4, 5, 6, 7, 8}
+# vector repeated (2 genders)
+
+# DB_Death:
+# age_groups{0, 1-14, 15-19, 20-24, 25-29, ... [5-year steps] ..., 80-84, >= 85}
+# represented by {0, 1, 15, 20, 25, ... , 80, 85}
+# vector repeated (2 genders)
+
+# Needed transformation to get from DB_Death grouping to T_Avg grouping:
+# 0; 1 -> 0
+# 15; 20 -> 1
+# 25; 30 -> 2
+# 35; 40 -> 3
+# 45; 50 -> 4
+# 55; 60 -> 5
+# 65; 70 -> 6
+# 75; 80 -> 7
+# 85 -> 8
+# => Vector(0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8)
+# ==> repeat vector (2 genders)
+
+vec_group_death <- rep(c(0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8), times = 2)
+vec_group_death
+
+write.csv2(DB_Deaths, "db_deaths_export_test50.csv") 
+
+# Add grouping-vector to T_Death
+DB_Deaths_T <- DB_Deaths %>% mutate(age_group = vec_group_death)
+DB_Deaths_T <- DB_Deaths_T %>% group_by(gender, age_group) %>%
+  summarise(num_death = sum(num_death), .groups = "drop")
+```
+
+### 3.2 Join T_Avg with DB_Death based on age group and gender.
+
+```{r}
+
+# Full join of T_Avg and DB_Death
+T_Lost <- full_join(T_Avg, DB_Deaths_T, by = c("age_group", "gender"))
+
+T_Lost
+```
+
+### 3.3 Calculate the sum of all lost life expectancy because of COVID-19 deaths in each age group.
+
+```{r}
+# Add variable with the sum of all lost life expectancies
+T_Lost <- T_Lost %>% mutate(sum_lost_life_exp = num_death*avg_life_exp_group)
+
+## Calculate total average of lost_life_exp
+## T_Lost %>% sum(sum_lost_life_exp) / sum(num_group)
+
+T_Lost$sum_lost_life_exp
+```
+
+### 3.4 Calculate the average life expectancy lost for a person (in years, days and hours) depending on their age group.
+
+```{r}
+
+T_Lost <- T_Lost %>% mutate(avg_lost_life_exp = sum_lost_life_exp / num_group)
+# Lost live expectency in years
+T_Lost$avg_lost_life_exp
+
+# Lost live expectency in months -> * 12 months
+T_Lost <- T_Lost %>% mutate(avg_lost_life_exp_mon = avg_lost_life_exp * 12)
+
+# Lost live expectency in days -> * 365 days
+T_Lost <- T_Lost %>% mutate(avg_lost_life_exp_day = round(avg_lost_life_exp * 365))
+
+# Lost live expectency in hours -> * 365 days * 24 hours
+T_Lost <- T_Lost %>% mutate(avg_lost_life_exp_hour = round(avg_lost_life_exp * 365 * 24))
+
+T_Lost %>% select(gender, age_group, avg_lost_life_exp_day, avg_lost_life_exp_hour)
+
+#write.csv2(T_Lost, "t_lost_export_test100.csv")
+
+#T_Lost[, c(avg_lost_life_exp, avg_lost_life_exp_mon, avg_lost_life_exp_day)]
+
+
+age_group_in_word <- rep(c("0-14 years", "15-24 years", "25-34 years", "35-44 years", "45-54 years", "55-64 years", "65-74 years", "75-84 years", "85 years and over"), each = 2)
+
+age_group_in_word 
+
+T_Lost <- T_Lost %>% add_column(age_group_in_word)
+
+T_Final <- T_Lost  %>% select(age_group, age_group_in_word, gender, avg_lost_life_exp_day, avg_lost_life_exp_hour)
+
+T_Final
+
+write.csv2(T_Lost, "t_lost_export_test1000.csv")
+```
+
+<br>
+
+<br>
+
+## Data Visualization
+
+Several plots were created to present the data in a graphically understandable way:
+
+1.  Visualisation of the average remaining life expectancy and the effect of CODIV-19 deaths on it
+    1.  Creation of a custom key glyph for the legend
+    2.  Visualisation of average life expectancy by age group
+    3.  Visualisation of average loss of life expectancy due to COVID-19 deaths by age group
+    4.  Combination of visualisations into a plot showing both life expectancy and loss of life expectancy due to COVID-19
+2.  Alternative representation: Classification of loss of life expectancy due to COVID-19 deaths into facets (hours, days, weeks, months)
+3.  Visualisation of total lost life expectancy per age group
+
+<br>
+
+### 1.1 Creation of a custom key glyph for the legend
+
+```{r}
+
+# Create key glyphs: They show two colours for each gender (life expectancy in blue, effect of COVID deaths in red)
+
+# Colour Palett: paletteer_d("RColorBrewer::Spectral") from https://r-charts.com/color-palettes/#google_vignette
+# Reasoning for colours: 
+# Blue was chosen as a neutral colour for remaining life expectancy
+# Red was chosen as in connection with loss and the COVID-19 virus
+
+# Colours female:
+col_fem_exp <- "#313695"
+col_fem_loss <- "#A50026"
+# Colours men:
+col_men_exp <- "#4575B4"
+col_men_loss <- "#D73027"
+
+# Create two different coloured triangles for women:
+triangle_top_female <- polygonGrob(x=c(0,0,1), y = c(0,1,1), gp = gpar(fill = "#313695"))
+triangle_bottom_female <- polygonGrob(x=c(0,1,1), y = c(0,0,1), gp = gpar(fill = "#A50026"))
+
+# Create two different coloured triangles for men:
+triangle_top_male <- polygonGrob(x=c(0,0,1), y = c(0,1,1), gp = gpar(fill = "#4575B4"))
+triangle_bottom_male <- polygonGrob(x=c(0,1,1), y = c(0,0,1), gp = gpar(fill = "#D73027"))
+
+# Combine the triangles for women or for men
+draw_key_glyph <- function(data, params, size) {
+  if (data$fill == "#313695") { # Colour for women in the first plot
+    return(grobTree(triangle_top_female, triangle_bottom_female)) # Combine two triangles
+  }
+  if (data$fill == "#4575B4") { # Colour for men in the first plot
+    return(grobTree(triangle_top_male, triangle_bottom_male)) # Combine two triangles
+  } 
+}
+```
+
+### 1.2 Visualisation of average life expectancy by age group
+
+```{r fig.width=10}
+
+# T_Avg schema: gender, age_group, avg_life_exp_group
+
+# Function to add a symbol to the tick labels later for clarity
+labels_y <- function(x) {
+  paste0(x, "y")
+}
+
+# Prepare picture to be integrated into the plot
+hourglass_png <- readPNG("pic_hourglass.png")
+hourglass_grob <- rasterGrob(hourglass_png, interpolate = TRUE)
+
+# Create plot of the average remaining life expectancy (grouped by age)
+Plot_Expect <- ggplot(T_Avg, aes(x = str_wrap(age_group, width = 8), y = avg_life_exp_group, fill = gender)) +
+  geom_col(
+    position = position_dodge(width = 0.6), # position_dodge() -> for gender side by side; width -> width of space for both bars (gender)
+    width = 0.6, # widht of each bar individually
+    key_glyph = draw_key_glyph # Add custom glyph in Legend
+    ) + 
+  geom_text(
+    aes(label = paste0(round(avg_life_exp_group, 0), "y"),
+      color = gender), # Bar labels
+    position = position_dodge(width = 0.75), # Label position: difference to horizontal center of bar
+    vjust = -1.05, # Lapel position: vertical distance to end of bar
+    size = 4.2, # Label font size
+    fontface = "bold", # Label bold
+    show.legend = FALSE # No next layer about color field in legend
+    ) +
+  geom_vline(xintercept = seq(1.5, 9, by = 1), color = "white") + # Adapt grid lines to visually support groupings by age
+  scale_x_discrete(labels = NULL) + # X-scyle shared with next plot (only shown in the next plot)
+  scale_y_continuous(
+    name = "Without COVID-Effect\n(in years)",
+    label = labels_y, # Add "y" to tick labels for clarity
+    expand = expansion(
+      mult = c(0, 0), # No change in %
+      add = c(0, 17)), # Bottom: add 0 y-steps, Top: add 17 y-steps
+    ) +
+  scale_fill_manual(values = c("#313695", "#4575B4")) + # Adapt colour of bars (Colour scheme: https://r-charts.com/ranking/bar-plot-ggplot2/)
+  scale_color_manual(values = c("#313695", "#4575B4")) +
+  theme(
+    axis.line.x = element_line(linewidth = 0.8), # Bold first x-line
+    axis.text.y = element_text(size=11.5), # Style axis tick label
+    axis.ticks = element_line(linewidth = 0), # No axis ticks line
+    panel.grid.major.x = element_blank(), # Replaced by lines between age groups
+    legend.title = element_blank(), # No legend title -> "male, female" self-explanatory as "gender"
+    legend.text = element_text(size = 10), # Larger fontsize for "male, female"
+    legend.position = c(0.9, 0.8), # Positioning towards the top right corner
+    legend.key.spacing.y = unit(3, "pt") # Space between "male" and "female"
+  ) + 
+  annotation_custom(grob = hourglass_grob, xmin = 6.8, xmax = 8.2, ymin= 38, ymax = Inf) # Add picture of hourglass as a symbol of remaining life expectancy
+
+```
+
+### 1.3 Visualisation of average loss of life expectancy due to COVID-19 deaths by age group
+
+```{r fig.width=10}
+
+# Function to add a symbol to the tick labels later for clarity
+labels_h <- function(x) {
+    paste(x, "h")
+}
+labels_d <- function(x) {
+    paste(x, "d")
+}
+
+# Prepare picture to be integrated into the plot
+virus_png <- readPNG("pic_virus.png")
+virus_grob <- rasterGrob(virus_png, interpolate = TRUE)
+
+# Create plot of the average lost life expectancy by COVID-19 deaths (grouped by age)
+Plot_Expect_Loss <- ggplot(T_Final, aes(x = str_wrap(age_group_in_word, width = 8), y = - avg_lost_life_exp_hour, fill = gender)) + # Negative y-values to highlight the loss of this time
+  geom_col(
+    position = position_dodge(width = 0.6), # position_dodge() -> for gender side by side; width -> width of space for both bars (gender)
+    width = 0.6 # widht of each bar individually
+    ) + 
+  geom_text(
+    aes(label = ifelse(- avg_lost_life_exp_hour > - 120, 
+                       paste0(- avg_lost_life_exp_hour, "h"),
+                       paste0(- round(avg_lost_life_exp_hour / 24), "d")), # Label with hours "h" under 120 h, label days "d" over 120 h
+        color = gender), # Color for labels
+    position = position_dodge(width = 0.85), # Label position: difference to horizontal center of bar
+    vjust =  1.8, # Lapel position: vertical distance to end of bar
+    size = 4.2, # Label font size
+    fontface = "bold" # Label bold
+    ) +
+  geom_vline(xintercept = seq(1.5, 9, by = 1), color = "white") + # Adapt grid lines to visually support groupings by age
+  scale_x_discrete(
+    position = "top") + # X-scale shown at the top as shared axis
+  scale_y_continuous(
+    name = "Effect of COVID-deaths\n(in hours, days)",
+    label = labels_h, # Add "h" to tick labels for clarity
+    breaks = seq(0, -2000, by = -600), # Adapt grid lines: Chosen so that it is perfectly divisible by 24 without remainder, so that the lines fit both hours and days
+    expand = expansion(
+      mult = c(0, 0), # No change in %
+      add = c(300, 5)), # Bottom: add 100 y-steps, Top: add 5 y-steps
+    sec.axis = sec_axis(
+      #name = "days", # Not shown, as already specified in the description of the y-axis
+      label = labels_d, # Add "d" for days to tick labels for clarity
+      breaks = seq(0, -100, by = -25), # Add ticks for days
+      transform = function(y) y / 24) # Transform hous h into days d
+    ) +
+  labs( title = "Effect of coronavirus deaths\non the average remaining life expectancy of their age group",
+        x = "Age",
+        ) +
+  scale_fill_manual(values = c("#A50026", "#D73027")) + # Adapt colour of bar (https://r-charts.com/ranking/bar-plot-ggplot2/)
+  scale_color_manual(values = c("#A50026", "#D73027")) +
+  theme(
+    plot.title = element_blank(),
+    axis.title.x = element_text(size=11.5, face = "bold"),
+    axis.line.x = element_line(linewidth = 0.8), # Bold first x-line
+    axis.text.x = element_text(size=11.5, face = "bold"), # Style axis tick label
+    axis.text.y = element_text(size=11.5), # Style axis tick label
+    axis.ticks = element_line(linewidth = 0), # No axis ticks line
+    panel.grid.major.x = element_blank(), # Replaced by lines between age groups
+    legend.position = "NONE"
+  ) + 
+  annotation_custom(grob = virus_grob, xmin = 1.65, xmax = 4, ymin= -Inf, ymax = -910) # Add picture of a COVID-19 virus as symbol for the root cause for lost life expectancy
+
+```
+
+### 1.4 Combination of visualisations into a plot showing both life expectancy and loss of life expectancy due to COVID-19
+
+```{r fig.width=10}
+
+# Combine both plots
+# Use of library "patchwork"!
+
+Plot_Expect_Combined <- (Plot_Expect + theme(plot.margin = margin(t = 0, r = 0, b = -7, l = 0))) / (Plot_Expect_Loss + theme(plot.margin = margin(t = -7, r = 0, b = 0, l = 0))) # Combine plots and move them closer together vertically
+
+Plot_Expect_Combined <- wrap_elements(Plot_Expect_Combined) +
+  plot_annotation( 
+    title = "Average remaining life expectancy and the effect of CODIV-19 deaths on it", # Shared title for the combined plot
+    theme = theme(
+      plot.title = element_text(size = 14, hjust = 0.5, margin = margin(t = 10))) # Adapt visual style of the shared title
+    ) +
+  labs(tag = "Remaining Life Expectancy") + # Shared title for the y-axis
+  theme(
+    plot.tag = element_text(size = rel(1), angle = 90, face = "bold"), # Adapt visual style of the shared y-axis title
+    plot.tag.position = "left"
+  ) +
+  plot_layout(guide = "collect") # One shared legend
+
+
+Plot_Expect_Combined
+
+```
+
+## Data Visualization 2
+
+---- Not yet revised!
+
+<br>
+
+```{r fig.width=10}
+
+# T_Avg schema: gender, age_group, avg_life_exp_group
+
+# Add "y" to the tick labels for clarity
+labels_y <- function(x) {
+  paste0(x, "y")
+  #ifelse(x == 0, 
+  #    paste0(x, " years"),
+  #    paste0(x, "y"))
+}
+
+# Prepare picture to be integrated into the plot
+hourglass_png <- readPNG("pic_hourglass.png")
+hourglass_grob <- rasterGrob(hourglass_png, interpolate = TRUE)
+
+
+Plot_Expect <- ggplot(T_Avg, aes(x = str_wrap(age_group, width = 8), y = avg_life_exp_group, fill = gender)) +
+  geom_col(
+    position = position_dodge(width = 0.6), # position_dodge() -> for gender side by side; width -> width of space for both bars (gender)
+    width = 0.6, # widht of each bar individually
+    key_glyph = draw_key_glyph # Add custom glyph in Legend
+    ) + 
+  geom_text(
+    aes(label = paste0(round(avg_life_exp_group, 0), "y"),
+      color = gender), # Bar labels
+    position = position_dodge(width = 0.75), # Label position: difference to horizontal center of bar
+    vjust = -1.05, # Lapel position: vertical distance to end of bar
+    size = 4.2, # Label font size
+    fontface = "bold", # Label bold
+    show.legend = FALSE # No next layer about color field in legend
+    ) +
+  geom_vline(xintercept = seq(1.5, 9, by = 1), color = "white") + # Adapt grid lines
+  scale_x_discrete(labels = NULL) + # X-scyle shared with next plot (only shown in the next plot)
+  scale_y_continuous(
+    name = "Without COVID-Effect\n(in years)",
+    label = labels_y,
+    expand = expansion(
+      mult = c(0, 0), # No change in %
+      add = c(0, 17)), # Bottom: add 0 y-steps, Top: add 17 y-steps
+    ) +
+  labs( title = "Effect of coronavirus deaths\non the average remaining life expectancy of their age group",
+        x = "Age",
+        y = "Lost life expectancy") +
+  scale_fill_manual(values = c("#313695", "#4575B4")) + # Adapt colour of bar (https://r-charts.com/ranking/bar-plot-ggplot2/)
+  scale_color_manual(values = c("#313695", "#4575B4")) +
+  theme(
+    plot.title = element_blank(),
+    axis.title.x = element_blank(),
+    axis.line.x = element_line(linewidth = 0.8), # Bold first x-line
+    axis.text.x = element_text(size=11.5, face = "bold"), # Style axis tick label
+    #axis.title.y = element_text(angle = 0, vjust = 0.5),
+    axis.text.y = element_text(size=11.5), # Style axis tick label
+    axis.ticks = element_line(linewidth = 0), # No axis ticks
+    panel.grid.major.x = element_blank(), # Replaced by lines between age groups
+    legend.title = element_blank(),
+    legend.text = element_text(size = 10),
+    legend.position = c(0.9, 0.8),
+    legend.key.spacing.y = unit(3, "pt")
+  ) + annotation_custom(grob = hourglass_grob, xmin = 6.8, xmax = 8.2, ymin= 38, ymax = Inf)
+```
+
+```         
+```
+
+## Data Visualization 3
+
+```{r fig.width=10}
+
+# Check if labels of bars would overlap with each other / with bar (True if not):
+#T_Final <- T_Final %>% group_by(age_group) %>% mutate(
+#  label_shift = ifelse(((max(avg_lost_life_exp_hour) - min(avg_lost_life_exp_hour) #> 50) & gender == "Male"), 0, 0.65))
+
+#T_Final %>% select(age_group, avg_lost_life_exp_hour, label_shift)
+
+# ==> does not work, use ggrepel libary instead!
+
+
+T_Graph <- T_Final %>% 
+  mutate(facet_group = case_when (
+  avg_lost_life_exp_hour <= 10 ~ "hours",
+  avg_lost_life_exp_hour > 10 & avg_lost_life_exp_hour <= 100 ~ "days",
+  avg_lost_life_exp_hour > 100 & avg_lost_life_exp_hour <= 550 ~ "weeks",
+  avg_lost_life_exp_hour > 550 ~ "months")) %>% 
+  mutate(facet_group_fac = factor(facet_group, levels = c("hours", "days", "weeks", "months"))) %>% 
+  mutate(facet_value = case_when (
+  facet_group == "hours" ~ avg_lost_life_exp_hour,
+  facet_group == "days" ~ avg_lost_life_exp_hour / 24,
+  facet_group == "weeks" ~ avg_lost_life_exp_hour / (24*7),
+  facet_group == "months" ~ avg_lost_life_exp_hour / (24*(365/12))))
+
+T_Graph <- T_Graph %>% 
+  mutate(width_bar = case_when (
+  avg_lost_life_exp_hour <= 10 ~ 0.1,
+  avg_lost_life_exp_hour > 10 & avg_lost_life_exp_hour <= 100 ~ 0.3,
+  avg_lost_life_exp_hour > 100 & avg_lost_life_exp_hour <= 550 ~ 0.5,
+  avg_lost_life_exp_hour > 550 ~ 0.8))
+  
+
+T_Graph
+
+ggplot(T_Graph, aes(x = str_wrap(age_group_in_word, width = 8), y = - facet_value, fill = gender, width = width_bar)) + 
+  geom_col(
+    position = position_dodge2(width = 1, preserve = "single", padding = 0) # position_dodge() -> for gender side by side; width -> width of space for both bars (gender)
+    #width = 0.6 # widht of each bar individually
+    #width = width_bar
+    ) + 
+  facet_wrap("facet_group_fac", nrow = 1, scales = "free_x") +
+#  geom_text( # "_repel" to avoid overlapping labels!
+#    aes(label = ifelse(- avg_lost_life_exp_hour > - 120, 
+#                       paste0(- avg_lost_life_exp_hour, "h"),
+#                       paste0(- round(avg_lost_life_exp_hour / 24), "d")), # Label with hours "h" under 120 h, label days "d" over 120 h
+#        color = gender), # Color for labels
+#    position = position_dodge(width = 0.8), # Label position: difference to horizontal center of bar
+#    vjust =  1.5, # Lapel position: vertical distance to end of bar
+#    size = 3.8, # Label font size
+#    fontface = "bold" # label bold
+#    ) +
+  scale_x_discrete(position = "top") + 
+  scale_y_continuous(
+#    name = "hours",
+#    expand = expansion(
+#      mult = c(0, 0), # No change in %
+#      add = c(100, 5)), # Bottom: add 100 y-steps, Top: add 5 y-steps
+#      sec.axis = sec_axis(
+#      name = "days",
+#      transform = function(y) y / 24) # Transform hous h into days d
+    ) +
+  labs( title = "Title",
+        x = "Age",
+        y = "Lost life expectancy") +
+theme(
+  axis.line.x = element_line(linewidth = 0.8) # Bold first x-line
+)
+
+```
+
+T_Graph.factor( "facet_group", levels = c("hours", "days", "weeks", "months"))
+
+levels = c("hours", "days", "weeks", "months")
+
+factor(facet_group, levels = c("hours", "days", "weeks", "months"))
+
+stat_summary(fun = mean)

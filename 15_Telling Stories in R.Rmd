@@ -2,7 +2,7 @@
 title: "Reduction in average life expectancy due to COVID-19-deaths"
 author: 
 - name: Thy Duong, Benjamin Willnecker
-  affiliation: Technical University of Munich
+  affiliation: Technical University of Munidafefaewfawefaewfch
 abstract: "Based on age-specific life expectancy, we calculate how much earlier than expected COVID-19 deaths passed away. For each age group, this is accumulated and then divided by the total number of people in the age group to determine the average remaining lifetime reduction for each member of the age group. It is shown, that the reduciton in life expectancy from COVID-19 deaths increases with age."
 keywords: "COVID-19, live expectancy, telling stories with R: data visualization, SOT86603"
 output: 

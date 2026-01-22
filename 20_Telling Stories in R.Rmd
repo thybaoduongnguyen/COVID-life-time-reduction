@@ -189,9 +189,9 @@ rules_DB_Num <- validator(
   in_range(age_year, min = 0, max = 85), # Min in Data = "0 years"; Max in Data = "85 years and over"
   sum(num) > 82000000, # sum population of germany between 82 and 84 mio.
   sum(num) < 84000000, # sum population of germany between 82 and 84 mio.
-  all_complete(gender), # no missiing values
-  all_complete(age_year), # no missiing values
-  all_complete(num), # no missiing values
+  all_complete(gender), # no missing values
+  all_complete(age_year), # no missing values
+  all_complete(num), # no missing values
   is_unique(gender, age_year))  # unique combinations of gender and age
 
 test_DB_Num <- confront(DB_Num, rules_DB_Num)
@@ -242,9 +242,9 @@ rules_DB_Life_Exp <- validator(
   gender %vin% c("Male", "Female"),
   in_range(age_year, min = 0, max = 100), # Min in Data = "0 years"; Max in Data = "100 years"
   in_range(life_exp, min = 0, max = 95), # life_exp not negative, not over 90 years
-  all_complete(gender), # no missiing values
-  all_complete(age_year), # no missiing values
-  all_complete(life_exp), # no missiing values
+  all_complete(gender), # no missing values
+  all_complete(age_year), # no missing values
+  all_complete(life_exp), # no missing values
   is_unique(gender, age_year))  # unique combinations of gender and age
 
 test_DB_Life_Exp <- confront(DB_Life_Exp, rules_DB_Life_Exp)
@@ -275,8 +275,8 @@ DB_Deaths <- DB_Deaths %>% mutate(value = replace(value, value == "-", 0))
 # write.csv2(DB_Deaths, "db_deaths_export_test.csv")
 
 # Proof that age of COVID-19 deaths is always known
-number_deaths_age_unkonown <- DB_Deaths_Import %>% filter("4_variable_attribute_label" == "COVID-19, virus detected") %>% count("3_variable_attribute_label" == "age unknown")
-number_deaths_age_unkonown
+number_deaths_age_unknown <- DB_Deaths_Import %>% filter("4_variable_attribute_label" == "COVID-19, virus detected") %>% count("3_variable_attribute_label" == "age unknown")
+number_deaths_age_unknown
 
 # Transformation in target schema
 DB_Deaths <- DB_Deaths %>% 
@@ -310,9 +310,9 @@ rules_DB_Deaths <- validator(
   in_range(age_group, min = 0, max = 85), # Min in Data = "under 1 year"; Max in Data = "85 years and over"
   sum(num_death) > 170000, # Source: Robert Koch Insitut (https://robert-koch-institut.github.io/COVID-19-Todesfaelle_in_Deutschland/)
   sum(num_death) < 200000, # Source: Robert Koch Insitut (https://robert-koch-institut.github.io/COVID-19-Todesfaelle_in_Deutschland/)
-  all_complete(gender), # no missiing values
-  all_complete(age_group), # no missiing values
-  all_complete(num_death)) # missiing values replaced by 0
+  all_complete(gender), # no missing values
+  all_complete(age_group), # no missing values
+  all_complete(num_death)) # missing values replaced by 0
 
 test_DB_Deaths <- confront(DB_Deaths, rules_DB_Deaths)
 summary(test_DB_Deaths)
@@ -806,7 +806,7 @@ Plot_Expect_Combined
 -   **Shared X-axis, Y-axis with same zero point:**
 
     -   Creates a link between the upper (remaining lifetime) and lower plots (loss of lifetime):\
-        Refering to the same age groups (x-axis) and dealing with the same concept of remaining life expectancy (y-axis).
+        Referring to the same age groups (x-axis) and dealing with the same concept of remaining life expectancy (y-axis).
 
 -   **Negative y-scale:**
 
@@ -1024,7 +1024,7 @@ ggplot(T_Graph, aes(x = str_wrap(age_group_in_word, width = 8), y = - facet_valu
 -   **Division into facets (time unit)**
 
     -   Dividing lost time into four facets based on units of time (hours, days, weeks, months) solves the following problem:\
-        Many viewers found larger values (e.g. loss of 51h) more abstract and less comprehensible than the converted values (e.g. loos of 2.1d).
+        Many viewers found larger values (e.g. loss of 51h) more abstract and less comprehensible than the converted values (e.g. loss of 2.1d).
 
     -   The key message, that younger people have lost only hours, while older people have lost months, can be made clearer.
 
@@ -1205,7 +1205,7 @@ Plot_Total_Loss <- ggplot(T_Lost_Total, aes(x = str_wrap(age_group_in_word, widt
     label = labels_K, # Add "K" to tick labels for clarity
     n.breaks = 10,
     expand = expansion(
-      mult = c(0.06, 0), # increse 6% of the size below
+      mult = c(0.06, 0), # increase 6% of the size below
       add = c(0, 0)) # Bottom: add 0 y-steps, Top: add 0 y-steps
     ) +
   labs( title = "Lost years of life expectancy due to COVID-19 deaths for each age group in total",
@@ -1262,3 +1262,5 @@ Plot_Total_Loss
 -   **Y-axis labels:**
 
     -   The Y-axis has been expressed in thousands (K) for better readability.
+
+*Apart from this important point, the reasoning is generally the same as for the plot above.*

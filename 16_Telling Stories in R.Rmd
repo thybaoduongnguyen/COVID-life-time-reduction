@@ -9,8 +9,8 @@ title: "Reduction in average life expectancy due to COVID-19-deaths"
 author: 
 - name: Benjamin Willnecker, Thy Duong
   affiliation: Technical University of Munich
-abstract: "Based on age-specific life expectancy, we calculate how much earlier than expected COVID-19 deaths passed away. For each age group, this is accumulated and then divided by the total number of people in the age group to determine the average remaining lifetime reduction for each member of the age group. It is shown, that the reduciton in life expectancy from COVID-19 deaths increases with age."
-keywords: "COVID-19, live expectancy, telling stories with R: data visualization, SOT86603"
+abstract: "Based on age-specific life expectancy, we calculate how much earlier than expected COVID-19 deaths passed away. For each age group, this is accumulated and then divided by the total number of people in the age group to determine the average remaining lifetime reduction for each member of the age group. It is shown, that the reduction in life expectancy from COVID-19 deaths increases with age."
+keywords: "COVID-19, life expectancy, telling stories with R: data visualization, SOT86603"
 output: 
   html_document: 
     theme: readable
@@ -342,7 +342,7 @@ The average life expectancy and loss of life expectancy due to COVID-19 deaths p
 
     2.2 For each age group: Calculate the average life expectancy per person in that age group.
 
-3.  Calculate the **average loose of life expectancy due to COVID-19 deaths** per age group:
+3.  Calculate the **average loss of life expectancy due to COVID-19 deaths** per age group:
 
     3.1 Make the age groups (age_group) in the DB_Death table the same as the age groups (age_group) in the T_Avg table.
 
@@ -428,7 +428,7 @@ T_Sum <- T_Sum %>% mutate(sum_life_exp = round(num * life_exp))
 tail(T_Sum)
 ```
 
-### 2.1 Create a vector for grouping (vec_grouping) add it to T_Sum, group accordingly and calculate the sum of live expectancy per group (sum_life_exp_group).
+### 2.1 Create a vector for grouping (vec_grouping) add it to T_Sum, group accordingly and calculate the sum of life expectancy per group (sum_life_exp_group).
 
 ```{r}
 
@@ -543,16 +543,16 @@ T_Lost_Total <- T_Lost
 ```{r}
 
 T_Lost <- T_Lost %>% mutate(avg_lost_life_exp = sum_lost_life_exp / num_group)
-# Lost live expectency in years
+# Lost live expectancy in years
 T_Lost$avg_lost_life_exp
 
-# Lost live expectency in months -> * 12 months
+# Lost live expectancy in months -> * 12 months
 T_Lost <- T_Lost %>% mutate(avg_lost_life_exp_mon = avg_lost_life_exp * 12)
 
-# Lost live expectency in days -> * 365 days
+# Lost live expectancy in days -> * 365 days
 T_Lost <- T_Lost %>% mutate(avg_lost_life_exp_day = round(avg_lost_life_exp * 365))
 
-# Lost live expectency in hours -> * 365 days * 24 hours
+# Lost live expectancy in hours -> * 365 days * 24 hours
 T_Lost <- T_Lost %>% mutate(avg_lost_life_exp_hour = round(avg_lost_life_exp * 365 * 24))
 
 T_Lost %>% select(gender, age_group, avg_lost_life_exp_day, avg_lost_life_exp_hour)

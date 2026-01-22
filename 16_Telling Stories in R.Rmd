@@ -9,7 +9,7 @@ title: "Reduction in average life expectancy due to COVID-19-deaths"
 author: 
 - name: Benjamin Willnecker, Thy Duong
   affiliation: Technical University of Munich
-abstract: "Based on age-specific life expectancy, we calculate how much earlier than expected COVID-19 deaths passed away. For each age group, this is accumulated and then divided by the total number of people in the age group to determine the average remaining lifetime reduction for each member of the age group. It is shown, that the reduction in life expectancy from COVID-19 deaths increases with age."
+abstract: "Based on age-specific life expectancy, we calculate how much earlier than expected COVID-19 deaths passed away. For each age group, this is accumulated and then divided by the total number of people in the age group to determine the average remaining lifetime reduction for each member of the age group. It is shown that the reduction in life expectancy from COVID-19 deaths increases with age."
 keywords: "COVID-19, life expectancy, telling stories with R: data visualization, SOT86603"
 output: 
   html_document: 
@@ -657,7 +657,7 @@ Plot_Expect <- ggplot(T_Avg, aes(x = str_wrap(age_group, width = 8), y = avg_lif
     aes(label = paste0(round(avg_life_exp_group, 0), "y"),
       color = gender), # Bar labels
     position = position_dodge(width = 0.75), # Label position: difference to horizontal center of bar
-    vjust = -1.05, # Lapel position: vertical distance to end of bar
+    vjust = -1.05, # Label position: vertical distance to end of bar
     size = 4.2, # Label font size
     fontface = "bold", # Label bold
     show.legend = FALSE # No text layer about color field in legend
@@ -722,7 +722,7 @@ Plot_Expect_Loss <- ggplot(T_Final, aes(x = str_wrap(age_group_in_word, width = 
                        paste0(- round(avg_lost_life_exp_hour / 24), "d")), # Label with hours "h" under 120 h, label days "d" over 120 h
         color = gender), # Color for labels
     position = position_dodge(width = 0.85), # Label position: difference to horizontal center of bar
-    vjust =  1.8, # Lapel position: vertical distance to end of bar
+    vjust =  1.8, # Label position: vertical distance to end of bar
     size = 4.2, # Label font size
     fontface = "bold" # Label bold
     ) +
@@ -954,7 +954,7 @@ ggplot(T_Graph, aes(x = str_wrap(age_group_in_word, width = 8), y = - facet_valu
         facet_group == "months" ~ paste0(round(- facet_value, 1), "m")), # Unit labels for bars
         color = gender), # Gender dependend color for labels
     position = position_dodge(width = 1), # Label position: difference to horizontal center of bar
-    vjust =  1.5, # Lapel position: vertical distance to end of bar
+    vjust =  1.5, # LaBel position: vertical distance to end of bar
     size = 3.8, # Label font size
     fontface = "bold", # Label bold
     show.legend = FALSE
@@ -1112,7 +1112,7 @@ Plot_Total_Loss <- ggplot(T_Lost_Total, aes(x = str_wrap(age_group_in_word, widt
          #              paste0(- round(avg_lost_life_exp_hour / 24), "d")), # Label with hours "h" under 120 h, label days "d" over 120 h
         color = gender), # Color for labels
     position = position_dodge(width = 0.85), # Label position: difference to horizontal center of bar
-    vjust =  1.8, # Lapel position: vertical distance to end of bar
+    vjust =  1.8, # Label position: vertical distance to end of bar
     size = 4.2, # Label font size
     fontface = "bold" # Label bold
     ) +
